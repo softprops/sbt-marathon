@@ -82,7 +82,7 @@ object Plugin extends sbt.Plugin {
                        .mem(mem)
                        .cpus(2.0)(as.String)).either
           for (_ <- start.right) yield log.info(
-            "deployed. active endpoints may be resolved by typing convoy")
+            "deployed. active endpoints may be resolved by typing marathon")
           for (e <- start.left) yield sys.error(
             s"failed to deploy $serviceId: ${e.getMessage}")
           start()
@@ -96,7 +96,7 @@ object Plugin extends sbt.Plugin {
       val log = streams.value.log
       val serviceId = (serviceIdentifier in marathonSetting).value
       val cli = trackjacket.Client(marathonHost.value, marathonPort.value)
-      log.info(s"convoy: undeploying $serviceId...")
+      log.info(s"marathon: undeploying $serviceId...")
       val stop = cli.stop(serviceId)(as.String).either
       for (_ <- stop.right) yield log.info(s"undeployed $serviceId")
       for (e <- stop.left) yield log.info(s"failed to undeploy $serviceId: ${e.getMessage}")
