@@ -26,12 +26,11 @@ object Plugin extends sbt.Plugin {
     val marathonInstances = settingKey[Int]("number of instances of the service to deploy")
     val marathonMem = settingKey[Double]("amount of memory to allocate for each service instance")
     val marathonCpus = settingKey[Double]("amount of cpus to allocate for each service instance")
+    val serviceIdentifier = settingKey[String]("formated service identifier used to to register with marathon. Defaults to {name}@{version}")
   }
   import MarathonKeys.{ marathon => marathonSetting, _ }
 
-  def serviceIdentifier(name: String, version: String) = s"$name@$version"
-
-  def marathonSettings: Seq[Def.Setting[_]] = Defaults.defaultSettings ++ Seq(
+  def marathonSettings: Seq[Def.Setting[_]] = Seq(
     marathonHost := trackjacket.Client.Default.host,
     marathonPort := trackjacket.Client.Default.port,
     marathonInstances := trackjacket.Client.Default.instances,
@@ -64,14 +63,14 @@ object Plugin extends sbt.Plugin {
       }).apply()
       cli.close()
     },
+    serviceIdentifier in marathonSetting := s"${name.value}@${version.value}",
     // remote distributions will potentially want to upload the assembly output path to a remote server
     distribute in marathonSetting <<= (outputPath in assembly).map(p => Future(p.getAbsolutePath)).dependsOn(assembly),
     deploy in marathonSetting <<= (
       distribute in marathonSetting, streams, jarName in assembly, name, version,
-      marathonHost, marathonPort, marathonInstances, marathonMem, marathonCpus).map {
-      (dist, out, jar, name, version, host, port, instances, mem, cpus) =>
+      marathonHost, marathonPort, marathonInstances, marathonMem, marathonCpus, serviceIdentifier in marathonSetting).map {
+      (dist, out, jar, name, version, host, port, instances, mem, cpus, serviceId) =>
         val log = out.log
-        val serviceId = serviceIdentifier(name, version)
         val diste = dist.either
         for (uri <- diste.right) yield {
           log.info(s"marathon: deploying $serviceId to fleet...")
@@ -95,7 +94,7 @@ object Plugin extends sbt.Plugin {
     },
     undeploy in marathonSetting := {
       val log = streams.value.log
-      val serviceId = serviceIdentifier(name.value, version.value)
+      val serviceId = (serviceIdentifier in marathonSetting).value
       val cli = trackjacket.Client(marathonHost.value, marathonPort.value)
       log.info(s"convoy: undeploying $serviceId...")
       val stop = cli.stop(serviceId)(as.String).either
@@ -109,9 +108,7 @@ object Plugin extends sbt.Plugin {
         (Seq(-2, 0, 2).map(marathonInstances.value + _).map(_.toString) ++ Seq("<n>")):_*
       )).parsed
       val log = streams.value.log
-      val service = name.value
-      val vers = version.value
-      val serviceId = serviceIdentifier(service, vers)
+      val serviceId = (serviceIdentifier in marathonSetting).value
       log.info(s"scaling $serviceId...")
       val cli = trackjacket.Client(marathonHost.value, marathonPort.value)
       cli.scale(serviceId, to)(as.String)()
